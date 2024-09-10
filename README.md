@@ -1,0 +1,178 @@
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+# validationserver
+
+This repository contains the R package to let users submit analyses to
+the Urban Institute’s [Safe Data
+Technologies](https://www.urban.org/projects/safe-data-technologies)
+Validation Server Version 2.0 prototype. See the [technical white
+paper](https://www.urban.org/research/publication/privacy-preserving-validation-server-version-2)
+for an overview of the project and detailed information about the
+prototype.
+
+## Usage
+
+### Installation
+
+To install `validationserver` from GitHub:
+
+``` r
+devtools::install_github('UrbanInstitute/validation-server-v2-r-package')
+```
+
+A valid R script must:
+
+1.  Include a main function called `run_analysis()` that takes a
+    `conf_data` argument with the confidential data.
+2.  Use the `get_table_output()` and/or `get_model_output()` functions
+    to define analyses.
+3.  Use the `submit_output()` function to specify all analyses to run.
+
+Otherwise, the R script can include arbitrary code to process and
+analyze the underlying data. The full R script will be executed, so you
+can define helper functions outside of the main `run_analysis()`
+function.
+
+### Basic Example
+
+This is a basic example of a script with a linear regression and summary
+table using the `penguins` dataset from the [`palmerpenguins` R
+package](https://allisonhorst.github.io/palmerpenguins/):
+
+``` r
+library(dplyr)
+library(palmerpenguins)
+
+run_analysis <- function(conf_data) {
+    # Arbitrary code -----------------------------------------------------------
+    transformed_data <- conf_data %>%
+        filter(year == 2007) %>%
+        mutate(bill_ratio = bill_length_mm / bill_depth_mm)
+    
+    # Specify analyses -----------------------------------------------------------
+    # Example regression 
+    example_fit <- lm(body_mass_g ~ bill_ratio, data = transformed_data)
+    example_model <- get_model_output(
+        fit = example_fit, 
+        model_name = "Example Model"
+    )
+    
+    # Example table 
+    example_table <- get_table_output(
+        data = transformed_data,
+        table_name = "Example Table",
+        stat = c("mean", "sd"),
+        var = "bill_ratio"
+    )
+    
+    # Submit analyses ------------------------------------------------------------
+    submit_output(example_table, example_model)
+}
+```
+
+### Model Examples
+
+The `get_model_output()` function requires two arguments:
+
+- `model_name` is an arbitrary name for the analysis. This name will
+  show up in your output and should be unique to each analysis in an R
+  script.
+- `fit` is a fit model object. Only `lm` and `glm` objects are currently
+  supported.
+
+Here’s an example of a script with a linear model (fit using `lm`) and
+binomial model (fit using `glm`):
+
+``` r
+library(dplyr)
+library(palmerpenguins)
+
+run_analysis <- function(conf_data) {
+    # Arbitrary code -----------------------------------------------------------
+    transformed_data <- conf_data %>%
+        mutate(mass_above_4kg = case_when(body_mass_g > 4000 ~ 1, 
+                                          TRUE ~ 0))
+
+    # Specify analyses -----------------------------------------------------------
+    # Example linear model 
+    lm_fit <- lm(body_mass_g ~ bill_length_mm, data = transformed_data)
+    lm_example <- get_model_output(
+        fit = lm_fit, 
+        model_name = "Example Linear Model"
+    )
+
+    # Example binomial model 
+    glm_fit <- glm(mass_above_4kg ~ bill_length_mm, family = binomial, data = transformed_data)
+    glm_example <- get_model_output(
+        fit = glm_fit, 
+        model_name = "Example Binomial Model"
+    )
+
+    # Submit analyses ------------------------------------------------------------
+    submit_output(lm_example, glm_example)
+}
+```
+
+### Table Examples
+
+The `get_table_output()` function includes the following arguments:
+
+- `data` is the data frame object to create the summary table from. To
+  use the full data, specify `data = conf_data`.
+- `table_name` is an arbitrary name for the analysis. This name will
+  show up in your output and should be unique to each analysis in an R
+  script.
+- `stat` is the summary statistic (or set of summary statistics) to
+  calculate. This can include `mean`, `median`, `sum`, `sd`, `var`,
+  `min`, `max`, `n`, `n_distinct`, or `quantile(numeric_vector)`, where
+  `numeric_vector` can be any numeric vector with numbers between 0 and
+  1 of length greater than 0; e.g. `quantile(c(0.1, 0.5, .9))`
+- `var` is the variable (or set of variables) to summarize.
+- `by` (optional) is the variable (or set of variables) to group by.
+- `na.rm` (optional) specifies explicit NA behavior (defaults to
+  `FALSE`).
+
+Here’s an example of a script with (1) a single summary statistic, and
+(2) a table demonstrating how to pass multiple values into the `stat`,
+`var`, and `by` arguments.
+
+``` r
+library(dplyr)
+library(palmerpenguins)
+
+run_analysis <- function(conf_data) {
+    # Arbitrary code -----------------------------------------------------------
+    transformed_data <- conf_data %>%
+        filter(year == 2007) %>%
+        mutate(bill_ratio = bill_length_mm / bill_depth_mm)
+    
+    # Specify output -----------------------------------------------------------
+    # Example summary statistic 
+    table1 <- get_table_output(
+        data = transformed_data, 
+        table_name = "Example Table 1",
+        stat = "mean", 
+        var = "bill_ratio",
+        na.rm = TRUE
+    )
+    
+    # Example table with multiple stat/var/by values  
+    table2 <- get_table_output(
+        data = transformed_data, 
+        table_name = "Example Table 2",
+        stat = c("mean", "median", "sd", "quantile(seq(0, 1, .1))", "n"),
+        var = c("bill_length_mm", "bill_ratio"),
+        by = c("species", "island"), 
+        na.rm = TRUE
+    )
+    
+    # Submit output ------------------------------------------------------------
+    submit_output(table1, table2)
+}
+```
+
+## Contact
+
+This work is developed by the Urban Institute. For questions, reach out
+to: <validationserver@urban.org>.
